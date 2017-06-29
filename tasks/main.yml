@@ -60,7 +60,7 @@
 
   # Compare individual interfaces
   - name: Compare individual interfaces
-    debug: msg="CURRENT = < {{vars['ansible_'+item] }} > ------------------------------ PREVIOUS = < {{ vars['previous_hw_facts']['ansible_'+item] }} >"
+    debug: msg="CURRENT = < {{vars['ansible_'+item|regex_replace("-", "_")] }} > ------------------------------ PREVIOUS = < {{ vars['previous_hw_facts']['ansible_'+item|regex_replace("-", "_")] }} >"
     with_items: "{{ansible_interfaces}}"
     when: "'ansible_interfaces' in facts_to_compare and latest_hw_file != ''"
 
