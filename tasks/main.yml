@@ -1,0 +1,81 @@
+---
+# This playbook gathers facts and writes to a local file
+# If a past version exists, a diff is run 
+# If different, fail... 
+# An alternative method is to use fact caching
+  - name: Get list of all hw files 
+    find: 
+      paths: "{{ hwinfo_path }}"
+      patterns: "hw-info.*"
+      #patterns: "hw-info.json.*"
+    register: all_hw_files
+
+  - name: Get latest hw file 
+    set_fact: 
+      latest_hw_file: "{{ all_hw_files.files | sort(attribute='ctime',reverse=true) | first | default() }}"
+
+  - debug: msg="Latest hardware file is {{ latest_hw_file }}"
+
+  - name: Load previous hardware facts into a variable
+    slurp: 
+      src: "{{ latest_hw_file.path }}"
+    register: previous_hw_facts_file
+    when: "latest_hw_file != ''"
+    
+  #- debug: msg="Previous Hardware Facts is {{ previous_hw_facts_file['content'] | b64decode |from_json }}"
+
+  - name: Set previous hw facts (skip if no previous facts exist)
+    set_fact: 
+      previous_hw_facts: "{{ previous_hw_facts_file['content'] | b64decode |from_json }}"
+    when: "latest_hw_file != ''"
+
+  - name: Gather facts
+    setup: 
+    register: current_facts
+
+  - debug: msg="Timestamp of log is {{ ansible_date_time.date }}_{{ansible_date_time.hour}}{{ansible_date_time.minute}}{{ansible_date_time.second}}"
+
+  - name: Write facts to file system
+    template: src=hw-diff.json.j2 dest={{ hwinfo_path }}/hw-info.{{ ansible_date_time.date }}_{{ansible_date_time.hour}}{{ansible_date_time.minute}}{{ansible_date_time.second}}.json owner=root group=root
+ 
+  - name: Find hardware info files older than {{ delete_after_age }}
+    find:
+      paths: "{{ hwinfo_path }}"
+      #patterns: "hw-info.json.*"
+      patterns: "hw-info.*"
+      age: "{{ delete_after_age }}"
+      age_stamp: ctime
+    register: old_hw_files
+
+  - name: Remove hardware info files older than {{ delete_after_age }}
+    file: 
+      path: "{{ item.path }}"
+      state: absent
+    with_items: "{{ old_hw_files['files'] }}"
+
+  - name: Write hardware comparisons to stdout
+    debug: msg="{{ item }} -- CURRENT = < {{ vars[item] }} > ---------- PREVIOUS = < {{ vars['previous_hw_facts'][item] }} >" 
+    with_items: "{{ facts_to_compare }}"
+    when: "latest_hw_file != ''"
+
+  # Compare individual interfaces
+  - name: Compare individual interfaces
+    debug: msg="CURRENT = < {{vars['ansible_'+item] }} > ------------------------------ PREVIOUS = < {{ vars['previous_hw_facts']['ansible_'+item] }} >"
+    with_items: "{{ansible_interfaces}}"
+    when: "'ansible_interfaces' in facts_to_compare and latest_hw_file != ''"
+
+  - name: Set fact if hardware has changed
+    set_fact: 
+      hw_changed: True
+    when: previous_hw_facts is defined and vars[item] != vars['previous_hw_facts'][item]
+    with_items: "{{ facts_to_compare }}"
+
+  - name: Set fact if individual interfaces changed 
+    set_fact:
+      hw_changed: True
+    when: previous_hw_facts is defined and vars['ansible_'+item] != vars['previous_hw_facts']['ansible_'+item]
+    with_items: "{{ ansible_interfaces }}"
+
+  - fail: msg="Hardware has changed"
+    when: "hw_changed is defined and hw_changed" 
+    

@@ -1,0 +1,20 @@
+---
+# Path to save hardwre info files 
+hwinfo_path: "/tmp"
+# Delete /tmp hw info files older than:
+  # 86400           # Seconds
+  # 2d              # 2 Days
+  # 4w              # 4 Weeks
+delete_after_age: 4w
+# Ansible facts to compare 
+facts_to_compare:
+  - "ansible_processor_cores"
+  - "ansible_processor_count"
+  - "ansible_processor_threads_per_core"
+  - "ansible_processor_vcpus"
+  - "ansible_processor"
+  - "ansible_swaptotal_mb"
+  - "ansible_memtotal_mb"
+  - "ansible_default_ipv4"
+  - "ansible_devices"
+  - "ansible_interfaces"
